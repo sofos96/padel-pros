@@ -1,15 +1,17 @@
-const CACHE_NAME = 'padel-buddies-v1';
+const CACHE_NAME = 'padel-pros-v1';
+const BASE_PATH = '/padel-pros';
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/style.css',
-  '/script.js',
-  '/config.js',
-  '/manifest.json',
-  '/images/avatars/sofos.jpg',
-  '/images/avatars/millis.jpg',
-  '/images/avatars/mamoush.jpg',
-  '/images/avatars/andreas.jpg',
+  BASE_PATH + '/',
+  BASE_PATH + '/index.html',
+  BASE_PATH + '/style.css',
+  BASE_PATH + '/script.js',
+  BASE_PATH + '/config.js',
+  BASE_PATH + '/manifest.json',
+  BASE_PATH + '/images/logo.jpg',
+  BASE_PATH + '/images/avatars/sofos.jpg',
+  BASE_PATH + '/images/avatars/millis.jpg',
+  BASE_PATH + '/images/avatars/mamoush.jpg',
+  BASE_PATH + '/images/avatars/andreas.jpg',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'
 ];
@@ -57,8 +59,8 @@ self.addEventListener('activate', event => {
 self.addEventListener('push', event => {
   const options = {
     body: event.data ? event.data.text() : 'Νέα ειδοποίηση από Padel Pros!',
-    icon: '/images/logo.jpg',
-    badge: '/images/logo.jpg',
+    icon: BASE_PATH + '/images/logo.jpg',
+    badge: BASE_PATH + '/images/logo.jpg',
     vibrate: [100, 50, 100],
     data: {
       dateOfArrival: Date.now(),
@@ -68,7 +70,7 @@ self.addEventListener('push', event => {
       {
         action: 'explore',
         title: 'Άνοιγμα εφαρμογής',
-        icon: '/images/logo.jpg'
+        icon: BASE_PATH + '/images/logo.jpg'
       },
       {
         action: 'close',
@@ -89,7 +91,7 @@ self.addEventListener('notificationclick', event => {
   if (event.action === 'explore') {
     // Open the app
     event.waitUntil(
-      clients.openWindow('/')
+      clients.openWindow(BASE_PATH + '/')
     );
   }
 });

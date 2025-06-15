@@ -787,7 +787,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function initializePWA() {
     // Register service worker
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js')
+        navigator.serviceWorker.register('/padel-pros/sw.js')
             .then(registration => {
                 console.log('Service Worker registered:', registration);
             })
@@ -989,8 +989,8 @@ function showNotification(title, body, options = {}) {
     
     const defaultOptions = {
         body: body,
-        icon: '/images/logo.jpg',
-        badge: '/images/logo.jpg',
+        icon: '/padel-pros/images/logo.jpg',
+        badge: '/padel-pros/images/logo.jpg',
         vibrate: [100, 50, 100],
         ...options
     };

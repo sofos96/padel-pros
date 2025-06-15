@@ -2,7 +2,7 @@
   "name": "Padel Pros",
   "short_name": "Padel",
   "description": "Προγραμματισμός & Κρατήσεις Παιχνιδιών Padel",
-  "start_url": "/",
+  "start_url": "/padel-pros/",
   "display": "standalone",
   "background_color": "#667eea",
   "theme_color": "#667eea",
@@ -24,7 +24,7 @@
   "categories": ["sports", "lifestyle", "social"],
   "lang": "el",
   "dir": "ltr",
-  "scope": "/",
+  "scope": "/padel-pros/",
   "screenshots": [
     {
       "src": "images/screenshot-wide.png",
