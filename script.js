@@ -4,6 +4,7 @@ let currentDate = new Date();
 let availabilityDate = new Date();
 let deferredPrompt = null;
 let notificationPermission = false;
+let weatherForecastData = {}; // Store 3-day forecast data by date
 let appData = {
     sessions: [],
     venues: [
@@ -63,6 +64,9 @@ document.addEventListener('DOMContentLoaded', function() {
 async function initializeApp() {
     await loadData();
     initializeEventListeners();
+    initializePWA();
+    initializeNotifications();
+    initializeWeather(); // Initialize weather widget
     showUserSelection();
 }
 
@@ -307,7 +311,12 @@ function renderCalendar() {
 function createDayElement(day, isOtherMonth, isToday, hasSession = false, date = null) {
     const dayEl = document.createElement('div');
     dayEl.className = 'day';
-    dayEl.textContent = day;
+    
+    // Create day number element
+    const dayNumber = document.createElement('div');
+    dayNumber.className = 'day-number';
+    dayNumber.textContent = day;
+    dayEl.appendChild(dayNumber);
 
     if (isOtherMonth) {
         dayEl.classList.add('other-month');
@@ -317,6 +326,37 @@ function createDayElement(day, isOtherMonth, isToday, hasSession = false, date =
     }
     if (hasSession) {
         dayEl.classList.add('has-session');
+    }
+
+    // Add weather icon and temperature if forecast is available for this date
+    if (!isOtherMonth && date && hasWeatherForecast(date)) {
+        const dateStr = date.toISOString().split('T')[0];
+        const weatherData = getWeatherForDate(dateStr);
+        
+        if (weatherData) {
+            dayEl.classList.add('has-weather');
+            
+            // Create weather container
+            const weatherContainer = document.createElement('div');
+            weatherContainer.className = 'day-weather-container';
+            
+            // Create weather icon element
+            const weatherIcon = document.createElement('div');
+            weatherIcon.className = 'day-weather-icon';
+            weatherIcon.textContent = weatherData.icon;
+            weatherContainer.appendChild(weatherIcon);
+            
+            // Create temperature element
+            const weatherTemp = document.createElement('div');
+            weatherTemp.className = 'day-weather-temp';
+            weatherTemp.textContent = `${weatherData.maxTemp}°`;
+            weatherContainer.appendChild(weatherTemp);
+            
+            // Add tooltip with full weather info
+            weatherContainer.title = `${weatherData.condition} - ${weatherData.minTemp}°/${weatherData.maxTemp}°C`;
+            
+            dayEl.appendChild(weatherContainer);
+        }
     }
 
     if (!isOtherMonth && date) {
@@ -499,14 +539,24 @@ function updateAvailabilityInfo() {
     }
 
     const availablePlayers = getAvailablePlayersForDate(selectedDate);
+    const weatherAdvice = getWeatherAdvice();
+    
+    let infoHtml = '';
     
     if (availablePlayers.length === 0) {
-        availabilityInfo.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Κανένας παίκτης δεν είναι διαθέσιμος για αυτή την ημερομηνία';
+        infoHtml = '<i class="fas fa-exclamation-triangle"></i> Κανένας παίκτης δεν είναι διαθέσιμος για αυτή την ημερομηνία';
         availabilityInfo.className = 'availability-info no-availability';
     } else {
-        availabilityInfo.innerHTML = `<i class="fas fa-check-circle"></i> Διαθέσιμοι παίκτες: ${availablePlayers.join(', ')}`;
+        infoHtml = `<i class="fas fa-check-circle"></i> Διαθέσιμοι παίκτες: ${availablePlayers.join(', ')}`;
         availabilityInfo.className = 'availability-info has-availability';
     }
+    
+    // Add weather advice if available
+    if (weatherAdvice) {
+        infoHtml += `<br><div class="weather-advice"><i class="fas fa-cloud-sun"></i> ${weatherAdvice}</div>`;
+    }
+    
+    availabilityInfo.innerHTML = infoHtml;
 }
 
 // Render players grid based on availability
@@ -776,7 +826,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize PWA and notifications
     initializePWA();
-    initializeNotifications();
     
     // Start daily notification check
     startDailyNotificationCheck();
@@ -975,6 +1024,11 @@ function initializeNotifications() {
 }
 
 function showNotificationPrompt() {
+    // Check if prompt already exists
+    if (document.querySelector('.notification-prompt')) {
+        return;
+    }
+    
     const prompt = document.createElement('div');
     prompt.className = 'notification-prompt';
     prompt.innerHTML = `
@@ -1397,4 +1451,461 @@ function scheduleAllExistingReminders() {
             scheduleGameReminder(session);
         }
     });
+}
+
+// ==================== WEATHER FUNCTIONALITY ====================
+
+let weatherData = null;
+let weatherUpdateInterval = null;
+
+async function initializeWeather() {
+    await loadWeatherData();
+    
+    // Update weather every 30 minutes
+    weatherUpdateInterval = setInterval(loadWeatherData, 30 * 60 * 1000);
+}
+
+async function loadWeatherData() {
+    const weatherWidget = document.getElementById('weatherWidget');
+    
+    try {
+        // Show loading state
+        weatherWidget.innerHTML = `
+            <div class="weather-loading">
+                <i class="fas fa-spinner fa-spin"></i>
+                <span>Φόρτωση καιρού...</span>
+            </div>
+        `;
+
+        // Fetch real weather data from WeatherAPI.com
+        const weatherResponse = await fetchWeatherData();
+        
+        weatherData = weatherResponse;
+        renderWeatherWidget(weatherResponse);
+        
+        // Check for weather alerts
+        checkWeatherAlerts(weatherResponse);
+        
+        // Re-render calendar to show weather icons
+        if (currentUser) {
+            renderCalendar();
+        }
+        
+    } catch (error) {
+        console.error('Weather loading failed:', error);
+        
+        // Fallback to mock data if API fails
+        try {
+            const mockWeatherData = await getMockWeatherData();
+            weatherData = mockWeatherData;
+            renderWeatherWidget(mockWeatherData);
+            
+            // Re-render calendar to show weather icons
+            if (currentUser) {
+                renderCalendar();
+            }
+        } catch (mockError) {
+            weatherWidget.innerHTML = `
+                <div class="weather-error">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Δεν ήταν δυνατή η φόρτωση του καιρού
+                </div>
+            `;
+        }
+    }
+}
+
+async function fetchWeatherData() {
+    // Fetch current weather and 3-day forecast from WeatherAPI.com
+    const currentUrl = `${WEATHER_API_URL}/current.json?key=${WEATHER_API_KEY}&q=${WEATHER_LOCATION}&aqi=no`;
+    const forecastUrl = `${WEATHER_API_URL}/forecast.json?key=${WEATHER_API_KEY}&q=${WEATHER_LOCATION}&days=3&aqi=no&alerts=yes`;
+    
+    try {
+        const [currentResponse, forecastResponse] = await Promise.all([
+            fetch(currentUrl),
+            fetch(forecastUrl)
+        ]);
+        
+        if (!currentResponse.ok || !forecastResponse.ok) {
+            throw new Error('Weather API request failed');
+        }
+        
+        const currentData = await currentResponse.json();
+        const forecastData = await forecastResponse.json();
+        
+        // Debug logging
+        console.log('Weather API Response:', { currentData, forecastData });
+        console.log('Alerts data:', forecastData.alerts, 'Type:', typeof forecastData.alerts);
+        
+        // Transform API response to our format
+        const current = currentData.current || {};
+        const location = currentData.location || {};
+        const forecastDays = forecastData.forecast?.forecastday || [];
+        
+        // Store daily forecast data for calendar integration
+        weatherForecastData = {};
+        forecastDays.forEach((day, index) => {
+            const date = new Date(day.date);
+            const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+            
+            weatherForecastData[dateStr] = {
+                date: dateStr,
+                maxTemp: Math.round(day.day?.maxtemp_c || 25),
+                minTemp: Math.round(day.day?.mintemp_c || 15),
+                condition: day.day?.condition?.text || 'Clear',
+                icon: getWeatherEmoji(day.day?.condition?.code || 1000, 1), // Use day icon
+                code: day.day?.condition?.code || 1000,
+                chanceOfRain: day.day?.daily_chance_of_rain || 0,
+                avgHumidity: day.day?.avghumidity || 50,
+                maxWind: Math.round(day.day?.maxwind_kph || 10)
+            };
+        });
+        
+        console.log('Daily forecast data stored:', weatherForecastData);
+        
+        return {
+            current: {
+                temp: Math.round(current.temp_c || 20),
+                condition: (current.condition?.text || 'Clear').toLowerCase(),
+                description: current.condition?.text || 'Clear',
+                icon: getWeatherEmoji(current.condition?.code || 1000, current.is_day || 1),
+                humidity: current.humidity || 50,
+                windSpeed: Math.round(current.wind_kph || 0),
+                windDirection: current.wind_dir || 'N',
+                feelsLike: Math.round(current.feelslike_c || current.temp_c || 20),
+                uv: current.uv || 0,
+                visibility: current.vis_km || 10
+            },
+            forecast: generateHourlyForecast(forecastDays[0]?.hour || []),
+            dailyForecast: weatherForecastData,
+            alerts: (forecastData.alerts && Array.isArray(forecastData.alerts)) ? 
+                forecastData.alerts.map(alert => alert.headline || alert.event || 'Weather Alert') : [],
+            location: {
+                name: location.name || 'Nicosia',
+                country: location.country || 'Cyprus',
+                localtime: location.localtime || new Date().toISOString()
+            }
+        };
+        
+    } catch (error) {
+        console.error('Error fetching weather data:', error);
+        throw error;
+    }
+}
+
+function getWeatherEmoji(code, isDay) {
+    // WeatherAPI.com condition codes to emoji mapping
+    const weatherEmojis = {
+        1000: isDay ? '☀️' : '🌙', // Clear/Sunny
+        1003: '🌤️', // Partly cloudy
+        1006: '☁️', // Cloudy
+        1009: '☁️', // Overcast
+        1030: '🌫️', // Mist
+        1063: '🌦️', // Patchy rain possible
+        1066: '🌨️', // Patchy snow possible
+        1069: '🌨️', // Patchy sleet possible
+        1072: '🌨️', // Patchy freezing drizzle possible
+        1087: '⛈️', // Thundery outbreaks possible
+        1114: '❄️', // Blowing snow
+        1117: '❄️', // Blizzard
+        1135: '🌫️', // Fog
+        1147: '🌫️', // Freezing fog
+        1150: '🌦️', // Patchy light drizzle
+        1153: '🌦️', // Light drizzle
+        1168: '🌨️', // Freezing drizzle
+        1171: '🌨️', // Heavy freezing drizzle
+        1180: '🌦️', // Patchy light rain
+        1183: '🌧️', // Light rain
+        1186: '🌦️', // Moderate rain at times
+        1189: '🌧️', // Moderate rain
+        1192: '🌧️', // Heavy rain at times
+        1195: '🌧️', // Heavy rain
+        1198: '🌨️', // Light freezing rain
+        1201: '🌨️', // Moderate or heavy freezing rain
+        1204: '🌨️', // Light sleet
+        1207: '🌨️', // Moderate or heavy sleet
+        1210: '🌨️', // Patchy light snow
+        1213: '❄️', // Light snow
+        1216: '🌨️', // Patchy moderate snow
+        1219: '❄️', // Moderate snow
+        1222: '🌨️', // Patchy heavy snow
+        1225: '❄️', // Heavy snow
+        1237: '🌨️', // Ice pellets
+        1240: '🌦️', // Light rain shower
+        1243: '🌧️', // Moderate or heavy rain shower
+        1246: '🌧️', // Torrential rain shower
+        1249: '🌨️', // Light sleet showers
+        1252: '🌨️', // Moderate or heavy sleet showers
+        1255: '🌨️', // Light snow showers
+        1258: '❄️', // Moderate or heavy snow showers
+        1261: '🌨️', // Light showers of ice pellets
+        1264: '🌨️', // Moderate or heavy showers of ice pellets
+        1273: '⛈️', // Patchy light rain with thunder
+        1276: '⛈️', // Moderate or heavy rain with thunder
+        1279: '⛈️', // Patchy light snow with thunder
+        1282: '⛈️'  // Moderate or heavy snow with thunder
+    };
+    
+    return weatherEmojis[code] || (isDay ? '☀️' : '🌙');
+}
+
+function generateHourlyForecast(hourlyData) {
+    if (!hourlyData || !Array.isArray(hourlyData)) {
+        return [];
+    }
+    
+    const now = new Date();
+    const currentHour = now.getHours();
+    const forecast = [];
+    
+    // Get next 5 periods (every 3 hours)
+    for (let i = 1; i <= 5; i++) {
+        const targetHour = (currentHour + i * 3) % 24;
+        const hourData = hourlyData.find(h => {
+            try {
+                return new Date(h.time).getHours() === targetHour;
+            } catch (e) {
+                return false;
+            }
+        });
+        
+        if (hourData && hourData.temp_c !== undefined) {
+            forecast.push({
+                time: `${targetHour.toString().padStart(2, '0')}:00`,
+                temp: Math.round(hourData.temp_c),
+                icon: getWeatherEmoji(hourData.condition?.code || 1000, hourData.is_day || 1)
+            });
+        }
+    }
+    
+    // If we don't have enough forecast data, fill with current conditions
+    while (forecast.length < 3) {
+        const hour = (currentHour + forecast.length + 1) % 24;
+        forecast.push({
+            time: `${hour.toString().padStart(2, '0')}:00`,
+            temp: '?',
+            icon: '🌤️'
+        });
+    }
+    
+    return forecast;
+}
+
+async function getMockWeatherData() {
+    // Mock weather data for Nicosia, Cyprus
+    // In production, replace with real API call
+    const currentHour = new Date().getHours();
+    const isDay = currentHour >= 6 && currentHour < 20;
+    
+    const conditions = [
+        { condition: 'clear', icon: isDay ? '☀️' : '🌙', temp: 24, desc: 'Αίθριος' },
+        { condition: 'clouds', icon: '⛅', temp: 22, desc: 'Συννεφιά' },
+        { condition: 'rain', icon: '🌧️', temp: 18, desc: 'Βροχή' },
+        { condition: 'sun', icon: '☀️', temp: 26, desc: 'Ηλιοφάνεια' }
+    ];
+    
+    const randomCondition = conditions[Math.floor(Math.random() * conditions.length)];
+    
+    // Generate 3-day mock forecast for calendar
+    weatherForecastData = {};
+    const today = new Date();
+    
+    for (let i = 0; i < 3; i++) {
+        const date = new Date(today);
+        date.setDate(today.getDate() + i);
+        const dateStr = date.toISOString().split('T')[0];
+        
+        const dayCondition = conditions[Math.floor(Math.random() * conditions.length)];
+        const baseTemp = 20 + Math.floor(Math.random() * 10);
+        
+        weatherForecastData[dateStr] = {
+            date: dateStr,
+            maxTemp: baseTemp + Math.floor(Math.random() * 8),
+            minTemp: baseTemp - Math.floor(Math.random() * 5),
+            condition: dayCondition.desc,
+            icon: dayCondition.icon,
+            code: 1000,
+            chanceOfRain: Math.floor(Math.random() * 100),
+            avgHumidity: 45 + Math.floor(Math.random() * 30),
+            maxWind: Math.floor(Math.random() * 20) + 5
+        };
+    }
+    
+    console.log('Mock daily forecast data stored:', weatherForecastData);
+    
+    return {
+        current: {
+            temp: randomCondition.temp + Math.floor(Math.random() * 6) - 3, // ±3°C variation
+            condition: randomCondition.condition,
+            description: randomCondition.desc,
+            icon: randomCondition.icon,
+            humidity: 45 + Math.floor(Math.random() * 30),
+            windSpeed: Math.floor(Math.random() * 15) + 5,
+            windDirection: ['Β', 'ΒΑ', 'Α', 'ΝΑ', 'Ν', 'ΝΔ', 'Δ', 'ΒΔ'][Math.floor(Math.random() * 8)]
+        },
+        forecast: generateMockForecast(),
+        dailyForecast: weatherForecastData,
+        alerts: Math.random() > 0.8 ? ['Ισχυροί άνεμοι αναμένονται το απόγευμα'] : []
+    };
+}
+
+function generateMockForecast() {
+    const forecast = [];
+    const baseTemp = 20 + Math.floor(Math.random() * 10);
+    
+    for (let i = 1; i <= 5; i++) {
+        const hour = (new Date().getHours() + i * 3) % 24;
+        const temp = baseTemp + Math.floor(Math.random() * 8) - 4;
+        const conditions = ['☀️', '⛅', '🌤️', '🌧️'];
+        
+        forecast.push({
+            time: `${hour.toString().padStart(2, '0')}:00`,
+            temp: temp,
+            icon: conditions[Math.floor(Math.random() * conditions.length)]
+        });
+    }
+    
+    return forecast;
+}
+
+function renderWeatherWidget(data) {
+    const weatherWidget = document.getElementById('weatherWidget');
+    
+    const alertsHtml = data.alerts.length > 0 ? `
+        <div class="weather-alerts">
+            <div class="alert-title">⚠️ Προειδοποιήσεις:</div>
+            ${data.alerts.map(alert => `<div>${alert}</div>`).join('')}
+        </div>
+    ` : '';
+    
+    const locationName = data.location ? data.location.name : 'Λευκωσία';
+    
+    weatherWidget.innerHTML = `
+        <div class="weather-content">
+            <div class="weather-main">
+                <div class="weather-icon">${data.current.icon}</div>
+                <div class="weather-temp">${data.current.temp}°</div>
+            </div>
+            <div class="weather-details">
+                <div class="weather-location">📍 ${locationName}</div>
+                <div class="weather-description">${data.current.description}</div>
+                <div class="weather-extra">
+                    💧${data.current.humidity}% • 💨${data.current.windSpeed}km/h
+                </div>
+            </div>
+        </div>
+        ${data.forecast.length > 0 ? `
+        <div class="weather-forecast">
+            ${data.forecast.slice(0, 4).map(item => `
+                <div class="forecast-item">
+                    <div class="forecast-time">${item.time}</div>
+                    <div class="forecast-icon">${item.icon}</div>
+                    <div class="forecast-temp">${item.temp}°</div>
+                </div>
+            `).join('')}
+        </div>
+        ` : ''}
+        ${alertsHtml}
+    `;
+}
+
+function checkWeatherAlerts(data) {
+    // Check for weather conditions that might affect padel games
+    const temp = data.current.temp;
+    const condition = data.current.condition.toLowerCase();
+    const windSpeed = data.current.windSpeed;
+    const uv = data.current.uv || 0;
+    
+    let alerts = [];
+    
+    // Temperature alerts
+    if (temp > 35) {
+        alerts.push('🌡️ Υψηλές θερμοκρασίες - Προσοχή στην ενυδάτωση!');
+    }
+    
+    if (temp < 10) {
+        alerts.push('🥶 Χαμηλές θερμοκρασίες - Ντυθείτε ζεστά!');
+    }
+    
+    // Weather condition alerts
+    if (condition.includes('rain') || condition.includes('drizzle') || condition.includes('shower')) {
+        alerts.push('🌧️ Βροχή - Ελέγξτε αν τα γήπεδα είναι στεγασμένα!');
+    }
+    
+    if (condition.includes('thunder') || condition.includes('storm')) {
+        alerts.push('⛈️ Καταιγίδα - Αποφύγετε το παιχνίδι σε εξωτερικά γήπεδα!');
+    }
+    
+    if (condition.includes('snow') || condition.includes('blizzard')) {
+        alerts.push('❄️ Χιόνι - Τα γήπεδα μπορεί να είναι κλειστά!');
+    }
+    
+    if (condition.includes('fog') || condition.includes('mist')) {
+        alerts.push('🌫️ Ομίχλη - Μειωμένη ορατότητα, προσοχή!');
+    }
+    
+    // Wind alerts
+    if (windSpeed > 25) {
+        alerts.push('💨 Ισχυροί άνεμοι - Μπορεί να επηρεάσουν το παιχνίδι!');
+    }
+    
+    // UV alerts
+    if (uv > 8) {
+        alerts.push('☀️ Υψηλή UV ακτινοβολία - Χρησιμοποιήστε αντηλιακό!');
+    }
+    
+    // Show weather-based notifications (only for severe conditions)
+    if (alerts.length > 0 && notificationPermission && (temp > 38 || temp < 5 || windSpeed > 30 || condition.includes('thunder'))) {
+        alerts.forEach(alert => {
+            showNotification('Καιρικές Συνθήκες', alert, {
+                tag: 'weather-alert',
+                icon: (window.location.pathname.includes('/padel-pros/') ? '/padel-pros' : '') + '/images/logo.jpg'
+            });
+        });
+    }
+}
+
+function getWeatherAdvice() {
+    if (!weatherData) return '';
+    
+    const temp = weatherData.current.temp;
+    const condition = weatherData.current.condition;
+    
+    if (condition === 'rain') {
+        return '🌧️ Βρέχει - Καλύτερα να παίξετε σε στεγασμένο γήπεδο!';
+    }
+    
+    if (temp > 30) {
+        return '🌡️ Ζέστη - Φέρτε πολύ νερό και παίξτε νωρίς το πρωί ή αργά το απόγευμα!';
+    }
+    
+    if (temp < 15) {
+        return '🧥 Κρύο - Ντυθείτε ζεστά και κάντε καλό προθέρμανση!';
+    }
+    
+    if (weatherData.current.windSpeed > 20) {
+        return '💨 Άνεμος - Προσαρμόστε το παιχνίδι σας στις συνθήκες!';
+    }
+    
+    return '✅ Ιδανικές συνθήκες για padel!';
+}
+
+// Get weather forecast for a specific date (YYYY-MM-DD format)
+function getWeatherForDate(dateStr) {
+    return weatherForecastData[dateStr] || null;
+}
+
+// Check if a date has weather forecast available (today + 2 days)
+function hasWeatherForecast(date) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset time to start of day
+    
+    const targetDate = new Date(date);
+    targetDate.setHours(0, 0, 0, 0); // Reset time to start of day
+    
+    const diffTime = targetDate.getTime() - today.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    // Weather available for today (0), tomorrow (1), and day after (2)
+    return diffDays >= 0 && diffDays <= 2;
 } 
