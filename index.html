@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Padel Pros - Προγραμματισμός Παιχνιδιών</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="description" content="Προγραμματισμός & Κρατήσεις Παιχνιδιών Padel">
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Padel Pros">
+    <link rel="apple-touch-icon" href="images/logo.jpg">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
+    <link rel="stylesheet" href="style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <!-- User Selection Modal -->
+    <div id="userSelectionModal" class="modal">
+        <div class="modal-content">
+            <h2><i class="fas fa-user-friends"></i> Ποιος είσαι;</h2>
+            <p>Επίλεξε το προφίλ σου για να συνεχίσεις</p>
+            <div class="user-selection-grid">
+                <div class="user-option" data-user="Σόφος">
+                    <img src="images/avatars/sofos.jpg" alt="Σόφος" class="user-avatar">
+                    <span>Σόφος</span>
+                </div>
+                <div class="user-option" data-user="Μίλλης">
+                    <img src="images/avatars/millis.jpg" alt="Μίλλης" class="user-avatar">
+                    <span>Μίλλης</span>
+                </div>
+                <div class="user-option" data-user="Μάμους">
+                    <img src="images/avatars/mamoush.jpg" alt="Μάμους" class="user-avatar">
+                    <span>Μάμους</span>
+                </div>
+                <div class="user-option" data-user="Αντρέας">
+                    <img src="images/avatars/andreas.jpg" alt="Αντρέας" class="user-avatar">
+                    <span>Αντρέας</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-table-tennis"></i> Padel Pros</h1>
+            <p>Προγραμματισμός & Κρατήσεις Παιχνιδιών</p>
+            <div class="current-user">
+                <img id="currentUserAvatar" src="" alt="" class="current-user-avatar">
+                <span id="currentUserName"></span>
+                <button id="changeUserBtn" class="change-user-btn">
+                    <i class="fas fa-exchange-alt"></i>
+                </button>
+            </div>
+        </header>
+
+        <nav class="tab-nav">
+            <button class="tab-btn active" data-tab="calendar">
+                <i class="fas fa-calendar-alt"></i>
+                Ημερολόγιο
+            </button>
+            <button class="tab-btn" data-tab="availability">
+                <i class="fas fa-clock"></i>
+                Διαθεσιμότητα
+            </button>
+            <button class="tab-btn" data-tab="booking">
+                <i class="fas fa-plus-circle"></i>
+                Νέα Κράτηση
+            </button>
+            <button class="tab-btn" data-tab="venues">
+                <i class="fas fa-map-marker-alt"></i>
+                Γήπεδα
+            </button>
+        </nav>
+
+        <!-- Calendar Tab -->
+        <div id="calendar" class="tab-content active">
+            <div class="calendar-header">
+                <button id="prevMonth"><i class="fas fa-chevron-left"></i></button>
+                <h2 id="currentMonth"></h2>
+                <button id="nextMonth"><i class="fas fa-chevron-right"></i></button>
+            </div>
+            <div class="calendar-grid" id="calendarGrid">
+                <div class="day-header">Δευ</div>
+                <div class="day-header">Τρι</div>
+                <div class="day-header">Τετ</div>
+                <div class="day-header">Πεμ</div>
+                <div class="day-header">Παρ</div>
+                <div class="day-header">Σαβ</div>
+                <div class="day-header">Κυρ</div>
+            </div>
+            
+            <div class="upcoming-sessions">
+                <h3><i class="fas fa-clock"></i> Επερχόμενα Παιχνίδια</h3>
+                <div id="upcomingSessions"></div>
+            </div>
+        </div>
+
+        <!-- Availability Tab -->
+        <div id="availability" class="tab-content">
+            <div class="availability-header">
+                <h3><i class="fas fa-clock"></i> Η Διαθεσιμότητά μου</h3>
+                <p>Επίλεξε τις ημέρες που μπορείς να παίξεις padel</p>
+            </div>
+            
+            <div class="availability-calendar">
+                <div class="availability-calendar-header">
+                    <button id="prevAvailabilityMonth"><i class="fas fa-chevron-left"></i></button>
+                    <h2 id="currentAvailabilityMonth"></h2>
+                    <button id="nextAvailabilityMonth"><i class="fas fa-chevron-right"></i></button>
+                </div>
+                <div class="availability-grid" id="availabilityGrid">
+                    <div class="day-header">Δευ</div>
+                    <div class="day-header">Τρι</div>
+                    <div class="day-header">Τετ</div>
+                    <div class="day-header">Πεμ</div>
+                    <div class="day-header">Παρ</div>
+                    <div class="day-header">Σαβ</div>
+                    <div class="day-header">Κυρ</div>
+                </div>
+            </div>
+            
+            <div class="availability-legend">
+                <div class="legend-item">
+                    <div class="legend-color available"></div>
+                    <span>Διαθέσιμος</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color unavailable"></div>
+                    <span>Μη διαθέσιμος</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color others-available"></div>
+                    <span>Άλλοι διαθέσιμοι</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Booking Tab -->
+        <div id="booking" class="tab-content">
+            <div class="booking-form">
+                <h3><i class="fas fa-plus-circle"></i> Νέα Κράτηση</h3>
+                <form id="sessionForm">
+                    <div class="form-group">
+                        <label for="sessionDate">Ημερομηνία:</label>
+                        <input type="date" id="sessionDate" required>
+                        <div id="availabilityInfo" class="availability-info"></div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="sessionTime">Ώρα:</label>
+                        <input type="time" id="sessionTime" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="venue">Γήπεδο:</label>
+                        <select id="venue" required>
+                            <option value="">Επιλέξτε γήπεδο...</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Παίκτες:</label>
+                        <div class="players-grid" id="playersGrid">
+                            <!-- Players will be populated dynamically based on availability -->
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="notes">Σημειώσεις:</label>
+                        <textarea id="notes" placeholder="Πχ. Φέρτε επιπλέον μπάλες..."></textarea>
+                    </div>
+                    
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-save"></i>
+                        Κράτηση Παιχνιδιού
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Venues Tab -->
+        <div id="venues" class="tab-content">
+            <div class="venues-header">
+                <h3><i class="fas fa-map-marker-alt"></i> Γήπεδα</h3>
+                <button id="addVenueBtn" class="btn-secondary">
+                    <i class="fas fa-plus"></i>
+                    Προσθήκη Γήπεδου
+                </button>
+            </div>
+            <div id="venuesList"></div>
+            
+            <!-- Add Venue Form (hidden by default) -->
+            <div id="addVenueForm" class="venue-form" style="display: none;">
+                <h4>Προσθήκη Νέου Γήπεδου</h4>
+                <form id="venueForm">
+                    <div class="form-group">
+                        <label for="venueName">Όνομα:</label>
+                        <input type="text" id="venueName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="venueAddress">Διεύθυνση:</label>
+                        <input type="text" id="venueAddress">
+                    </div>
+                    <div class="form-group">
+                        <label for="venuePhone">Τηλέφωνο:</label>
+                        <input type="tel" id="venuePhone">
+                    </div>
+                    <div class="form-group">
+                        <label for="venueWebsite">Website:</label>
+                        <input type="url" id="venueWebsite" placeholder="https://...">
+                    </div>
+                    <div class="form-group">
+                        <label for="venuePricePerHour">Τιμή/ώρα (€):</label>
+                        <input type="number" id="venuePricePerHour" step="0.01">
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary">
+                            <i class="fas fa-save"></i>
+                            Αποθήκευση
+                        </button>
+                        <button type="button" id="cancelVenue" class="btn-secondary">
+                            Ακύρωση
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Session Comments Modal -->
+    <div id="sessionCommentsModal" class="modal">
+        <div class="modal-content comments-modal">
+            <div class="modal-header">
+                <h2><i class="fas fa-comments"></i> Σχόλια Παιχνιδιού</h2>
+                <button id="closeCommentsModal" class="close-btn">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="session-info" id="sessionInfo">
+                <!-- Session details will be populated here -->
+            </div>
+            <div class="comments-container" id="commentsContainer">
+                <!-- Comments will be loaded here -->
+            </div>
+            <div class="comment-form">
+                <div class="form-group">
+                    <textarea id="newComment" placeholder="Γράψε ένα σχόλιο... (π.χ. 'Φέρτε επιπλέον μπάλες', 'Τρέχω 10 λεπτά αργά')"></textarea>
+                </div>
+                <button id="addCommentBtn" class="btn-primary">
+                    <i class="fas fa-paper-plane"></i>
+                    Αποστολή
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PWA Install Prompt -->
+    <div id="installPrompt" class="install-prompt" style="display: none;">
+        <div class="install-content">
+            <i class="fas fa-mobile-alt"></i>
+            <span>Εγκατάστησε την εφαρμογή στο κινητό σου!</span>
+            <button id="installBtn" class="btn-primary">Εγκατάσταση</button>
+            <button id="dismissInstall" class="btn-secondary">Όχι τώρα</button>
+        </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="script.js"></script>
+</body>
+</html> 
