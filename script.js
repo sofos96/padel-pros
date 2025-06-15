@@ -785,11 +785,29 @@ document.addEventListener('DOMContentLoaded', function() {
 // ==================== PWA FUNCTIONALITY ====================
 
 function initializePWA() {
+    // Clear old caches first
+    if ('caches' in window) {
+        caches.keys().then(cacheNames => {
+            cacheNames.forEach(cacheName => {
+                if (cacheName.includes('padel') && !cacheName.includes('v2')) {
+                    console.log('Deleting old cache:', cacheName);
+                    caches.delete(cacheName);
+                }
+            });
+        });
+    }
+
     // Register service worker
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/padel-pros/sw.js')
+        // Dynamic path detection
+        const basePath = window.location.pathname.includes('/padel-pros/') ? '/padel-pros' : '';
+        navigator.serviceWorker.register(basePath + '/sw.js')
             .then(registration => {
                 console.log('Service Worker registered:', registration);
+                // Force update if there's a waiting service worker
+                if (registration.waiting) {
+                    registration.waiting.postMessage({command: 'skipWaiting'});
+                }
             })
             .catch(error => {
                 console.log('Service Worker registration failed:', error);
@@ -989,8 +1007,8 @@ function showNotification(title, body, options = {}) {
     
     const defaultOptions = {
         body: body,
-        icon: '/padel-pros/images/logo.jpg',
-        badge: '/padel-pros/images/logo.jpg',
+        icon: (window.location.pathname.includes('/padel-pros/') ? '/padel-pros' : '') + '/images/logo.jpg',
+        badge: (window.location.pathname.includes('/padel-pros/') ? '/padel-pros' : '') + '/images/logo.jpg',
         vibrate: [100, 50, 100],
         ...options
     };

@@ -1,5 +1,6 @@
-const CACHE_NAME = 'padel-pros-v1';
-const BASE_PATH = '/padel-pros';
+const CACHE_NAME = 'padel-pros-v2';
+// Dynamic base path detection
+const BASE_PATH = self.location.pathname.includes('/padel-pros/') ? '/padel-pros' : '';
 const urlsToCache = [
   BASE_PATH + '/',
   BASE_PATH + '/index.html',
@@ -18,29 +19,60 @@ const urlsToCache = [
 
 // Install event - cache resources
 self.addEventListener('install', event => {
+  console.log('Service Worker installing...');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
         console.log('Opened cache');
         return cache.addAll(urlsToCache);
       })
+      .then(() => {
+        console.log('Cache populated, skipping waiting...');
+        return self.skipWaiting();
+      })
   );
+});
+
+// Handle skip waiting message
+self.addEventListener('message', event => {
+  if (event.data && event.data.command === 'skipWaiting') {
+    self.skipWaiting();
+  }
 });
 
 // Fetch event - serve from cache when offline
 self.addEventListener('fetch', event => {
+  // Skip cross-origin requests
+  if (!event.request.url.startsWith(self.location.origin)) {
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then(response => {
-        // Return cached version or fetch from network
-        return response || fetch(event.request);
-      }
-    )
+        if (response) {
+          return response;
+        }
+        
+        // For navigation requests, try to serve index.html
+        if (event.request.mode === 'navigate') {
+          return caches.match(BASE_PATH + '/index.html') || fetch(event.request);
+        }
+        
+        return fetch(event.request);
+      })
+      .catch(() => {
+        // If both cache and network fail, serve index.html for navigation
+        if (event.request.mode === 'navigate') {
+          return caches.match(BASE_PATH + '/index.html');
+        }
+      })
   );
 });
 
 // Activate event - clean up old caches
 self.addEventListener('activate', event => {
+  console.log('Service Worker activating...');
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
@@ -51,6 +83,9 @@ self.addEventListener('activate', event => {
           }
         })
       );
+    }).then(() => {
+      console.log('Service Worker activated, claiming clients...');
+      return self.clients.claim();
     })
   );
 });
