@@ -938,7 +938,6 @@ function showInstallPromptFallback() {
         }
     }, 12000);
 }
-}
 
 // ==================== NOTIFICATIONS FUNCTIONALITY ====================
 
